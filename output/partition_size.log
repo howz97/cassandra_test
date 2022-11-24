@@ -1,0 +1,14 @@
+test_partition_size-----------------
+num_part=2048 :[QPS=196616, Lantency=81ms]
+num_part=1024 :[QPS=188576, Lantency=84ms]
+num_part=512 :[QPS=178480, Lantency=91ms]
+num_part=256 :[QPS=163848, Lantency=92ms]
+num_part=128 :[QPS=163848, Lantency=92ms]
+num_part=64 :[QPS=163848, Lantency=90ms]
+num_part=32 :[QPS=163848, Lantency=89ms]
+num_part=16 :[QPS=174160, Lantency=92ms]
+num_part=8 :[QPS=163848, Lantency=90ms]
+num_part=4 :[QPS=163848, Lantency=91ms]
+num_part=2 :[QPS=136904, Lantency=94ms]
+num_part=1 :[QPS=78824, Lantency=161ms]
+----------------------------------

@@ -9,14 +9,14 @@ void call_back(CassFuture *future, void *data) {
   CassError ce = cass_future_error_code(future);
   if (ce == CASS_OK) {
     worker->batch_executed_++;
-    uint32_t lantency = std::chrono::duration_cast<std::chrono::milliseconds>(
-                            now - worker->last_point_)
-                            .count();
-    worker->lantency_sum_ += lantency;
-    if (lantency >= STAT_MAX) {
-      worker->lantency_stat_[STAT_LEN - 1]++;
+    uint32_t latency = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           now - worker->last_point_)
+                           .count();
+    worker->latency_sum_ += latency;
+    if (latency >= STAT_MAX) {
+      worker->latency_stat_[STAT_LEN - 1]++;
     } else {
-      worker->lantency_stat_[lantency / STAT_GRAIN]++;
+      worker->latency_stat_[latency / STAT_GRAIN]++;
     }
     cass_batch_free(worker->batch_);
     worker->batch_ = nullptr;
@@ -77,9 +77,17 @@ CassStatement *Worker::NewStatement() {
   return stmt;
 }
 
-uint32_t Worker::AverageLantency() {
+uint32_t Worker::AverageLatency() {
   if (batch_executed_ == 0) {
     return 0;
   }
-  return lantency_sum_ / batch_executed_;
+  return latency_sum_ / batch_executed_;
+}
+
+void Worker::CheckValid() {
+  uint32_t count = 0;
+  for (uint32_t c : latency_stat_) {
+    count += c;
+  }
+  assert(count == batch_executed_);
 }

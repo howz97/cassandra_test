@@ -85,9 +85,9 @@ CassError CassBatchExecutor::Wait_until(
     {
       cass_batch_free(fut_it->cass_batch);
       batch_executed_++;
-      auto lantency = std::chrono::duration_cast<std::chrono::milliseconds>(
+      auto latency = std::chrono::duration_cast<std::chrono::milliseconds>(
           std::chrono::system_clock::now() - fut_it->start_point);
-      sum_lantency_ms_ += lantency.count();
+      sum_latency_ms_ += latency.count();
       fut_it = futures_.erase(fut_it);
     } else {
       // Print error sql for notice

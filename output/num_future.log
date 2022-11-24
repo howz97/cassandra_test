@@ -1,0 +1,8 @@
+test_num_future-----------------
+num_fut=16384 :[QPS=63365, Lantency=217ms]
+num_fut=8192 :[QPS=59009, Lantency=119ms]
+num_fut=4096 :[QPS=57345, Lantency=64ms]
+num_fut=2048 :[QPS=55297, Lantency=33ms]
+num_fut=1024 :[QPS=49732, Lantency=18ms]
+num_fut=512 :[QPS=45274, Lantency=10ms]
+----------------------------------

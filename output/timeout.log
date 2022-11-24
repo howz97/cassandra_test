@@ -1,0 +1,11 @@
+-----------------test_batch_size
+batch_size=65535 : [QPS=327675, Lantency=904ms]
+batch_size=32767 : [QPS=196602, Lantency=505ms]
+Request timed out
+Request timed out
+Request timed out
+Error: Request timed out
+batch_size=16383 : [QPS=65532, Lantency=189ms]
+Error: Request timed out
+DatastaxTest: /home/zhanghao/code/cassandra_test/main.cpp:127: Result* measure_qps(uint32_t, uint32_t, uint32_t, bool): Assertion `create_table() == CASS_OK' failed.
+Aborted

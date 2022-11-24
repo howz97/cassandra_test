@@ -26,7 +26,7 @@ public:
   uint8_t PendingFutureCount() { return futures_.size(); }
   bool IsFull() { return current_batch_size_ == batch_size_; }
   int32_t BatchExecuted() { return batch_executed_; };
-  int32_t AvarageLantency() { return sum_lantency_ms_ / batch_executed_; };
+  int32_t AvarageLatency() { return sum_latency_ms_ / batch_executed_; };
 
 private:
   CassBatch *batch_{nullptr};
@@ -35,5 +35,5 @@ private:
   const int32_t batch_size_{0};
   int32_t current_batch_size_{0};
   int32_t batch_executed_{0};
-  int32_t sum_lantency_ms_{0};
+  int32_t sum_latency_ms_{0};
 };

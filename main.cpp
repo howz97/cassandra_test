@@ -90,8 +90,23 @@ CassError create_table() {
 
 struct Result {
   int32_t qps = 0;
-  int32_t lantency_ms = 0;
-  uint32_t lantency_stat[STAT_LEN] = {};
+  int32_t ave_latency = 0;
+  uint32_t latency_stat[STAT_LEN] = {};
+  uint32_t batch_executed = 0;
+
+  uint32_t LatencyPercentiles(double p) {
+    assert(p <= 1);
+    uint32_t left = batch_executed;
+    int32_t i = STAT_LEN - 1;
+    for (; i >= 0; --i) {
+      if (double(left - latency_stat[i]) / double(batch_executed) >= p) {
+        left -= latency_stat[i];
+      } else {
+        break;
+      }
+    }
+    return (i + 1) * STAT_GRAIN;
+  };
 };
 
 Result *generate_result(std::vector<Worker> workers) {
@@ -99,18 +114,20 @@ Result *generate_result(std::vector<Worker> workers) {
   uint32_t valid_worker = 0;
   for (Worker &w : workers) {
     if (w.batch_executed_) {
+      w.CheckValid();
       valid_worker++;
       result->qps += w.QPS();
-      result->lantency_ms += w.AverageLantency();
+      result->ave_latency += w.AverageLatency();
       for (uint32_t i = 0; i < STAT_LEN; ++i) {
-        result->lantency_stat[i] += w.lantency_stat_[i];
+        result->latency_stat[i] += w.latency_stat_[i];
       }
+      result->batch_executed += w.batch_executed_;
     } else {
       printf("worker %d executed 0 batch\n", w.id_);
     }
   }
   if (valid_worker) {
-    result->lantency_ms /= valid_worker;
+    result->ave_latency /= valid_worker;
   }
   return result;
 }
@@ -154,8 +171,16 @@ void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
             << "test_batch_size" << std::endl;
   for (int bs = max_batch; bs >= min_batch; bs /= 2) {
     Result *result = measure_qps(3, bs, 1, true);
-    fprintf(stdout, "batch_size=%d : [QPS=%d, Lantency=%dms]\n", bs,
-            result->qps, result->lantency_ms);
+    printf("batch_size=%d : ", bs);
+    printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result->qps,
+           result->ave_latency, result->LatencyPercentiles(0.99));
+    // for (uint32_t i = 0; i < STAT_LEN; ++i) {
+    //   if (result->latency_stat[i]) {
+    //     printf("(%d-%dms)=%d,", i * STAT_GRAIN, (i + 1) * STAT_GRAIN,
+    //            result->latency_stat[i]);
+    //   }
+    // }
+    // std::cout << std::endl;
   }
   std::cout << "----------------------------------" << std::endl;
 }
@@ -166,8 +191,8 @@ void test_num_future(const int max_fut, const int min_fut) {
   for (int nf = max_fut; nf >= min_fut; nf /= 2) {
     fprintf(stdout, "num_fut=%d :", nf);
     Result *result = measure_qps(nf, 2, 1, true);
-    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result->qps,
-            result->lantency_ms);
+    fprintf(stdout, "[QPS=%d, Latency=%dms]\n", result->qps,
+            result->ave_latency);
   }
   std::cout << "----------------------------------" << std::endl;
 }
@@ -178,8 +203,8 @@ void test_partition_size(const int max_part, const int min_part) {
   for (int p = max_part; p >= min_part; p /= 2) {
     fprintf(stdout, "num_part=%d :", p);
     Result *result = measure_qps(max_part, 16, p, true);
-    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result->qps,
-            result->lantency_ms);
+    fprintf(stdout, "[QPS=%d, Latency=%dms]\n", result->qps,
+            result->ave_latency);
   }
   std::cout << "----------------------------------" << std::endl;
 }
@@ -190,8 +215,8 @@ void test_continuous_insert(const int32_t looptimes) {
             << "test_continuous_insert" << std::endl;
   for (int32_t i = 0; i < looptimes; ++i) {
     Result *result = measure_qps(64, 256, 1, false);
-    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result->qps,
-            result->lantency_ms);
+    fprintf(stdout, "[QPS=%d, Latency=%dms]\n", result->qps,
+            result->ave_latency);
     sleep(1);
   }
   std::cout << "----------------------------------" << std::endl;
@@ -221,7 +246,7 @@ int main(int argc, char *argv[]) {
                                                         'replication_factor': '1' }");
   create_table();
   if (prepare_insert(session, &prepared) == CASS_OK) {
-    test_batch_size(65535, 32);
+    test_batch_size(65535, 128);
     // test_num_future(16384 * 2, 512);
     // test_partition_size(2048, 1);
     // test_continuous_insert(10);

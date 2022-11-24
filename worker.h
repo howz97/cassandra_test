@@ -7,8 +7,8 @@
 
 using time_point = std::chrono::time_point<std::chrono::system_clock>;
 
-#define STAT_GRAIN 10
-#define STAT_MAX 10000
+#define STAT_GRAIN 5
+#define STAT_MAX 5000
 #define STAT_LEN STAT_MAX / STAT_GRAIN
 #define RUN_SECONDS 3
 
@@ -28,8 +28,9 @@ public:
   ~Worker();
   void Execute();
   CassStatement *NewStatement();
-  uint32_t AverageLantency();
+  uint32_t AverageLatency();
   uint32_t QPS() { return (batch_executed_ * batch_size_) / RUN_SECONDS; };
+  void CheckValid();
 
   uint32_t id_;
   uint32_t target_partition_;
@@ -38,7 +39,8 @@ public:
   uint32_t batch_executed_{0};
   time_point last_point_;
   time_point end_point_;
-  uint32_t lantency_stat_[STAT_LEN] = {}; // ms
-  uint32_t lantency_sum_{0};              // ms
+  // statistic of latency.
+  uint32_t latency_stat_[STAT_LEN] = {}; // ms
+  uint32_t latency_sum_{0};              // ms
   CommonInfo *info_;
 };

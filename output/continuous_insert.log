@@ -1,0 +1,12 @@
+test_continuous_insert-----------------
+[QPS=77824, Lantency=371ms]
+[QPS=98816, Lantency=351ms]
+[QPS=98816, Lantency=347ms]
+[QPS=80896, Lantency=413ms]
+[QPS=104960, Lantency=308ms]
+[QPS=86528, Lantency=383ms]
+[QPS=81408, Lantency=406ms]
+[QPS=98816, Lantency=366ms]
+[QPS=98816, Lantency=359ms]
+[QPS=78336, Lantency=405ms]
+----------------------------------
