@@ -5,15 +5,13 @@
 #include <unistd.h>
 
 #include "cass/include/cassandra.h"
-#include "cass_executor.h"
+#include "worker.h"
 
 #define AVARAGE_LOOP 1
-#define QPS_SECONDS 2
 
 CassSession *session = NULL;
 const CassPrepared *prepared = NULL;
 CassUuidGen *uuid_gen = NULL;
-const char *directors[] = {"Bertluci", "AngLee", "WenJiang", "WoodyAllen"};
 
 void print_error(CassFuture *future) {
   const char *message;
@@ -90,120 +88,110 @@ CassError create_table() {
                                                      PRIMARY KEY (partition_key, director, name))");
 }
 
-CassStatement *insert_statement(int32_t pk, const char *director) {
-  CassStatement *stmt = cass_prepared_bind(prepared);
-  cass_statement_set_is_idempotent(stmt, cass_true);
-  cass_statement_bind_int32_by_name(stmt, "partition_key", pk);
-  cass_statement_bind_string_by_name(stmt, "director", director);
-  CassUuid uuid;
-  cass_uuid_gen_random(uuid_gen, &uuid);
-  cass_statement_bind_uuid_by_name(stmt, "name", uuid);
-  return stmt;
-}
-
 struct Result {
   int32_t qps = 0;
   int32_t lantency_ms = 0;
+  uint32_t lantency_stat[STAT_LEN] = {};
 };
 
-Result measure_qps(int num_fut, int batch_size, int num_part, bool clean_tbl) {
+Result *generate_result(std::vector<Worker> workers) {
+  Result *result = new Result;
+  uint32_t valid_worker = 0;
+  for (Worker &w : workers) {
+    if (w.batch_executed_) {
+      valid_worker++;
+      result->qps += w.QPS();
+      result->lantency_ms += w.AverageLantency();
+      for (uint32_t i = 0; i < STAT_LEN; ++i) {
+        result->lantency_stat[i] += w.lantency_stat_[i];
+      }
+    } else {
+      printf("worker %d executed 0 batch\n", w.id_);
+    }
+  }
+  if (valid_worker) {
+    result->lantency_ms /= valid_worker;
+  }
+  return result;
+}
+
+Result *measure_qps(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
+                    bool clean_tbl) {
+  // printf("measure_qps(%d, %d, %d, %d)\n", num_fut, batch_size, num_part,
+  //        clean_tbl);
   assert(num_fut);
   assert(batch_size);
   assert(num_part);
   assert(num_part <= num_fut);
-
   if (clean_tbl) {
     assert(create_table() == CASS_OK);
   }
-  CassBatchExecutor executor(session, batch_size);
 
-  auto end =
-      std::chrono::system_clock::now() + std::chrono::seconds(QPS_SECONDS);
-  while (std::chrono::system_clock::now() < end) {
-    for (int i = 0; i < num_fut; ++i) {
-      for (int j = 0; j < batch_size; ++j) {
-        auto stmt = insert_statement(i % num_part, "AngLee");
-        assert(executor.AddBatchStatement(stmt) == CASS_OK);
-      }
-      executor.Execute();
-    }
-    CassError ce = executor.Wait_until(end);
-    assert(ce == CASS_OK);
+  CommonInfo info;
+  {
+    info.session = session;
+    info.prepared = prepared;
+    info.uuid_gen = uuid_gen;
   }
+  std::vector<Worker> workers;
+  workers.reserve(num_fut);
+  for (uint32_t id = 0; id < num_fut; ++id) {
+    workers.emplace_back(id, id % num_part, batch_size, &info);
+  }
+  {
+    std::unique_lock lk(info.mu);
+    info.cv.wait(lk, [&] { return info.finished == num_fut; });
+  }
+
   if (clean_tbl) {
     execute_query(session, "DROP TABLE test.films");
   }
-  Result result;
-  result.qps = (executor.BatchExecuted() * batch_size) / QPS_SECONDS;
-  result.lantency_ms = executor.AvarageLantency();
-  return result;
+  return generate_result(workers);
 }
 
 void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
-  std::cout << "test_batch_size"
-            << "-----------------" << std::endl;
+  std::cout << "-----------------"
+            << "test_batch_size" << std::endl;
   for (int bs = max_batch; bs >= min_batch; bs /= 2) {
-    fprintf(stdout, "batch_size=%d :", bs);
-    Result result;
-    for (int i = 0; i < AVARAGE_LOOP; ++i) {
-      Result r = measure_qps(32, bs, 1, true);
-      result.qps += r.qps;
-      result.lantency_ms += r.lantency_ms;
-    }
-    result.qps /= AVARAGE_LOOP;
-    result.lantency_ms /= AVARAGE_LOOP;
-    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result.qps,
-            result.lantency_ms);
+    Result *result = measure_qps(3, bs, 1, true);
+    fprintf(stdout, "batch_size=%d : [QPS=%d, Lantency=%dms]\n", bs,
+            result->qps, result->lantency_ms);
   }
   std::cout << "----------------------------------" << std::endl;
 }
 
 void test_num_future(const int max_fut, const int min_fut) {
-  std::cout << "test_num_future"
-            << "-----------------" << std::endl;
+  std::cout << "-----------------"
+            << "test_num_future" << std::endl;
   for (int nf = max_fut; nf >= min_fut; nf /= 2) {
     fprintf(stdout, "num_fut=%d :", nf);
-    Result result;
-    for (int i = 0; i < AVARAGE_LOOP; ++i) {
-      Result r = measure_qps(nf, 2, 1, true);
-      result.qps += r.qps;
-      result.lantency_ms += r.lantency_ms;
-    }
-    result.qps /= AVARAGE_LOOP;
-    result.lantency_ms /= AVARAGE_LOOP;
-    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result.qps,
-            result.lantency_ms);
+    Result *result = measure_qps(nf, 2, 1, true);
+    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result->qps,
+            result->lantency_ms);
   }
   std::cout << "----------------------------------" << std::endl;
 }
 
 void test_partition_size(const int max_part, const int min_part) {
-  std::cout << "test_partition_size"
-            << "-----------------" << std::endl;
+  std::cout << "-----------------"
+            << "test_partition_size" << std::endl;
   for (int p = max_part; p >= min_part; p /= 2) {
     fprintf(stdout, "num_part=%d :", p);
-    Result result;
-    for (int i = 0; i < AVARAGE_LOOP; ++i) {
-      Result r = measure_qps(max_part, 16, p, true);
-      result.qps += r.qps;
-      result.lantency_ms += r.lantency_ms;
-    }
-    result.qps /= AVARAGE_LOOP;
-    result.lantency_ms /= AVARAGE_LOOP;
-    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result.qps,
-            result.lantency_ms);
+    Result *result = measure_qps(max_part, 16, p, true);
+    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result->qps,
+            result->lantency_ms);
   }
   std::cout << "----------------------------------" << std::endl;
 }
 
 void test_continuous_insert(const int32_t looptimes) {
   assert(create_table() == CASS_OK);
-  std::cout << "test_continuous_insert"
-            << "-----------------" << std::endl;
+  std::cout << "-----------------"
+            << "test_continuous_insert" << std::endl;
   for (int32_t i = 0; i < looptimes; ++i) {
-    Result result = measure_qps(64, 256, 1, false);
-    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result.qps,
-            result.lantency_ms);
+    Result *result = measure_qps(64, 256, 1, false);
+    fprintf(stdout, "[QPS=%d, Lantency=%dms]\n", result->qps,
+            result->lantency_ms);
     sleep(1);
   }
   std::cout << "----------------------------------" << std::endl;
@@ -233,10 +221,10 @@ int main(int argc, char *argv[]) {
                                                         'replication_factor': '1' }");
   create_table();
   if (prepare_insert(session, &prepared) == CASS_OK) {
-    // test_batch_size(65535, 32);
+    test_batch_size(65535, 32);
     // test_num_future(16384 * 2, 512);
     // test_partition_size(2048, 1);
-    test_continuous_insert(10);
+    // test_continuous_insert(10);
     cass_prepared_free(prepared);
   }
 
