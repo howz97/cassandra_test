@@ -189,10 +189,10 @@ void test_num_future(const int max_fut, const int min_fut) {
   std::cout << "-----------------"
             << "test_num_future" << std::endl;
   for (int nf = max_fut; nf >= min_fut; nf /= 2) {
-    fprintf(stdout, "num_fut=%d :", nf);
     Result *result = measure_qps(nf, 2, 1, true);
-    fprintf(stdout, "[QPS=%d, Latency=%dms]\n", result->qps,
-            result->ave_latency);
+    fprintf(stdout, "num_fut=%d :", nf);
+    printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result->qps,
+           result->ave_latency, result->LatencyPercentiles(0.99));
   }
   std::cout << "----------------------------------" << std::endl;
 }
@@ -201,10 +201,10 @@ void test_partition_size(const int max_part, const int min_part) {
   std::cout << "-----------------"
             << "test_partition_size" << std::endl;
   for (int p = max_part; p >= min_part; p /= 2) {
-    fprintf(stdout, "num_part=%d :", p);
     Result *result = measure_qps(max_part, 16, p, true);
-    fprintf(stdout, "[QPS=%d, Latency=%dms]\n", result->qps,
-            result->ave_latency);
+    fprintf(stdout, "num_part=%d :", p);
+    printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result->qps,
+           result->ave_latency, result->LatencyPercentiles(0.99));
   }
   std::cout << "----------------------------------" << std::endl;
 }
@@ -215,8 +215,8 @@ void test_continuous_insert(const int32_t looptimes) {
             << "test_continuous_insert" << std::endl;
   for (int32_t i = 0; i < looptimes; ++i) {
     Result *result = measure_qps(64, 256, 1, false);
-    fprintf(stdout, "[QPS=%d, Latency=%dms]\n", result->qps,
-            result->ave_latency);
+    printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result->qps,
+           result->ave_latency, result->LatencyPercentiles(0.99));
     sleep(1);
   }
   std::cout << "----------------------------------" << std::endl;
