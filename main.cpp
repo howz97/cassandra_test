@@ -8,6 +8,7 @@
 #include "worker.h"
 
 #define AVARAGE_LOOP 1
+#define TABLE_NAME "films"
 
 CassSession *session = NULL;
 const CassPrepared *prepared = NULL;
@@ -59,11 +60,13 @@ CassError execute_query(CassSession *session, const char *query) {
 
 CassError prepare_insert(CassSession *session, const CassPrepared **prepared) {
   CassError rc = CASS_OK;
-  const char *query =
-      "INSERT INTO test.films (partition_key, director, name, published, showing) \
-   VALUES (?, ?, ?, 2022, true);";
-
-  CassFuture *future = cass_session_prepare(session, query);
+  char buffer[256];
+  sprintf(
+      buffer,
+      "INSERT INTO test.%s (partition_key, director, name, published, showing) \
+          VALUES (?, ?, ?, 2022, true);",
+      TABLE_NAME);
+  CassFuture *future = cass_session_prepare(session, buffer);
   cass_future_wait(future);
 
   rc = cass_future_error_code(future);
@@ -79,13 +82,24 @@ CassError prepare_insert(CassSession *session, const CassPrepared **prepared) {
 }
 
 CassError create_table() {
-  return execute_query(session, "CREATE TABLE IF NOT EXISTS test.films ( \
+  char buffer[1024];
+  int n = sprintf(buffer, "CREATE TABLE IF NOT EXISTS test.%s ( \
                                                      partition_key int, \
                                                      director text, \
                                                      name uuid, \
                                                      published int, \
                                                      showing boolean, \
-                                                     PRIMARY KEY (partition_key, director, name))");
+                                                     PRIMARY KEY (partition_key, director, name))",
+                  TABLE_NAME);
+  assert(n > 0);
+  return execute_query(session, buffer);
+}
+
+CassError drop_table() {
+  char buffer[256];
+  int n = sprintf(buffer, "DROP TABLE test.%s", TABLE_NAME);
+  assert(n > 0);
+  return execute_query(session, buffer);
 }
 
 struct Result {
@@ -158,7 +172,7 @@ void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
   }
 
   if (clean_tbl) {
-    execute_query(session, "DROP TABLE test.films");
+    drop_table();
   }
   result->Calculate(workers);
 }
@@ -184,11 +198,13 @@ void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
 }
 
 void test_num_future(const int max_fut, const int min_fut) {
-  std::cout << "-----------------"
-            << "test_num_future" << std::endl;
+  uint32_t batch_size = 2;
+  uint32_t num_part = 1;
+  printf("-----------------test_num_partition batch_size=%d, num_part=%d\n",
+         batch_size, num_part);
   for (int nf = max_fut; nf >= min_fut; nf /= 2) {
     Result result;
-    measure(nf, 2, 1, true, &result);
+    measure(nf, batch_size, num_part, true, &result);
     fprintf(stdout, "num_fut=%d :", nf);
     printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result.qps,
            result.ave_latency, result.LatencyPercentiles(0.99));
@@ -196,12 +212,14 @@ void test_num_future(const int max_fut, const int min_fut) {
   std::cout << "----------------------------------" << std::endl;
 }
 
-void test_partition_size(const int max_part, const int min_part) {
-  std::cout << "-----------------"
-            << "test_partition_size" << std::endl;
+void test_num_partition(const int max_part, const int min_part) {
+  uint32_t concurrency = max_part;
+  uint32_t batch_size = 1024;
+  printf("-----------------test_num_partition concurrency=%d, batch_size=%d\n",
+         concurrency, batch_size);
   for (int p = max_part; p >= min_part; p /= 2) {
     Result result;
-    measure(max_part, 16, p, true, &result);
+    measure(concurrency, batch_size, p, true, &result);
     fprintf(stdout, "num_part=%d :", p);
     printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result.qps,
            result.ave_latency, result.LatencyPercentiles(0.99));
@@ -211,17 +229,21 @@ void test_partition_size(const int max_part, const int min_part) {
 
 void test_continuous_insert(const int32_t looptimes) {
   // assert(create_table() == CASS_OK);
-  std::cout << "-----------------"
-            << "test_continuous_insert" << std::endl;
+  uint32_t concurrency = 32;
+  uint32_t batch_size = 1024;
+  uint32_t num_part = 1;
+  printf("-----------------test_continuous_insert concurrency=%d, "
+         "batch_size=%d, num_part=%d\n",
+         concurrency, batch_size, num_part);
   for (int32_t i = 0; i < looptimes; ++i) {
     Result result;
-    measure(1024, 1024, 2, false, &result);
+    measure(concurrency, batch_size, num_part, false, &result);
     printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result.qps,
            result.ave_latency, result.LatencyPercentiles(0.99));
     sleep(1);
   }
   std::cout << "----------------------------------" << std::endl;
-  // execute_query(session, "DROP TABLE test.films");
+  // assert(drop_table() == CASS_OK);
 }
 
 int main(int argc, char *argv[]) {
@@ -250,7 +272,7 @@ int main(int argc, char *argv[]) {
     // test_batch_size(65535, 128);
     // test_num_future(16384 * 2, 512);
     // test_partition_size(2048, 1);
-    test_continuous_insert(30);
+    test_continuous_insert(100);
     cass_prepared_free(prepared);
   }
 

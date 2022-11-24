@@ -1,0 +1,70 @@
+-----------------test_continuous_insert(32,1024,1)
+QPS=126627, Latency[ave=278ms, 99p=680ms]
+QPS=96590, Latency[ave=369ms, 99p=780ms]
+QPS=126283, Latency[ave=284ms, 99p=725ms]
+QPS=96251, Latency[ave=372ms, 99p=765ms]
+QPS=125257, Latency[ave=282ms, 99p=685ms]
+QPS=95909, Latency[ave=371ms, 99p=770ms]
+QPS=124578, Latency[ave=288ms, 99p=685ms]
+QPS=92492, Latency[ave=385ms, 99p=785ms]
+QPS=120139, Latency[ave=297ms, 99p=695ms]
+QPS=95568, Latency[ave=375ms, 99p=770ms]
+QPS=121845, Latency[ave=286ms, 99p=760ms]
+QPS=97618, Latency[ave=365ms, 99p=760ms]
+QPS=120480, Latency[ave=294ms, 99p=775ms]
+QPS=96936, Latency[ave=364ms, 99p=755ms]
+QPS=118092, Latency[ave=294ms, 99p=800ms]
+QPS=100006, Latency[ave=354ms, 99p=750ms]
+QPS=113654, Latency[ave=305ms, 99p=790ms]
+QPS=95227, Latency[ave=375ms, 99p=815ms]
+QPS=112630, Latency[ave=318ms, 99p=795ms]
+QPS=101027, Latency[ave=353ms, 99p=735ms]
+QPS=107168, Latency[ave=325ms, 99p=795ms]
+QPS=105122, Latency[ave=336ms, 99p=730ms]
+QPS=92144, Latency[ave=378ms, 99p=810ms]
+QPS=120822, Latency[ave=289ms, 99p=705ms]
+QPS=95567, Latency[ave=371ms, 99p=770ms]
+QPS=117748, Latency[ave=304ms, 99p=730ms]
+QPS=95567, Latency[ave=373ms, 99p=780ms]
+QPS=123892, Latency[ave=286ms, 99p=660ms]
+QPS=94543, Latency[ave=374ms, 99p=810ms]
+QPS=123209, Latency[ave=288ms, 99p=750ms]
+QPS=97277, Latency[ave=366ms, 99p=760ms]
+QPS=120478, Latency[ave=290ms, 99p=750ms]
+QPS=96936, Latency[ave=365ms, 99p=750ms]
+QPS=117065, Latency[ave=300ms, 99p=815ms]
+QPS=94198, Latency[ave=377ms, 99p=790ms]
+QPS=110240, Latency[ave=322ms, 99p=845ms]
+QPS=98301, Latency[ave=363ms, 99p=775ms]
+QPS=103412, Latency[ave=344ms, 99p=835ms]
+QPS=106484, Latency[ave=333ms, 99p=720ms]
+QPS=93513, Latency[ave=376ms, 99p=845ms]
+QPS=119113, Latency[ave=295ms, 99p=685ms]
+QPS=93516, Latency[ave=379ms, 99p=790ms]
+QPS=115358, Latency[ave=311ms, 99p=720ms]
+QPS=92493, Latency[ave=385ms, 99p=790ms]
+QPS=121502, Latency[ave=289ms, 99p=850ms]
+QPS=98300, Latency[ave=360ms, 99p=760ms]
+QPS=121844, Latency[ave=291ms, 99p=795ms]
+QPS=97619, Latency[ave=357ms, 99p=750ms]
+QPS=121503, Latency[ave=289ms, 99p=770ms]
+QPS=98640, Latency[ave=359ms, 99p=745ms]
+QPS=118772, Latency[ave=300ms, 99p=750ms]
+QPS=97618, Latency[ave=363ms, 99p=745ms]
+QPS=114675, Latency[ave=308ms, 99p=825ms]
+QPS=99322, Latency[ave=352ms, 99p=735ms]
+QPS=114337, Latency[ave=312ms, 99p=795ms]
+QPS=100345, Latency[ave=346ms, 99p=740ms]
+QPS=111606, Latency[ave=314ms, 99p=780ms]
+
+
+Interval (ms) Max GC Elapsed (ms)Total GC Elapsed (ms)Stdev GC Elapsed (ms)   GC Reclaimed (MB)         Collections      Direct Memory Bytes
+755339        65                       4237           7                       116399043256              168              -1
+Interval (ms) Max GC Elapsed (ms)Total GC Elapsed (ms)Stdev GC Elapsed (ms)   GC Reclaimed (MB)         Collections      Direct Memory Bytes
+175468        63                       4331           5                       149660018192              213              -1
+
+
+
+
+
+
