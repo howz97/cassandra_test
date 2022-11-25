@@ -1,13 +1,11 @@
-[2022-11-25 02:59:17.197] [info] -----------------test_continuous_insert: concurrency=8, batch_size=65535, num_part=4
-[2022-11-25 02:59:22.640] [info] QPS=305830, Latency[ave=2129ms, 99p=3245ms]
-[2022-11-25 02:59:28.511] [info] QPS=305830, Latency[ave=2231ms, 99p=3420ms]
-[2022-11-25 02:59:34.244] [info] QPS=327675, Latency[ave=2174ms, 99p=3455ms]
-[2022-11-25 02:59:40.133] [info] QPS=349520, Latency[ave=2085ms, 99p=3525ms]
-[2022-11-25 02:59:46.324] [info] QPS=349520, Latency[ave=2211ms, 99p=3680ms]
-[2022-11-25 02:59:52.186] [info] QPS=327675, Latency[ave=2071ms, 99p=3335ms]
-[2022-11-25 02:59:52.186] [info] -------------------------------------------------
-
-Interval (ms) Max GC Elapsed (ms)Total GC Elapsed (ms)Stdev GC Elapsed (ms)   GC Reclaimed (MB)         Collections      Direct Memory Bytes
-59289         113                3783                 21                      60625964328               99               -1
-
-
+[2022-11-26 01:02:06.895] [info] -----------------test_batch_size: concurrency=1, num_part=1
+[2022-11-26 01:02:37.892] [info] batch_size=65535 : QPS=72088, Latency[ave=736ms, 99p=925ms]
+[2022-11-26 01:03:08.815] [info] batch_size=32767 : QPS=69902, Latency[ave=380ms, 99p=470ms]
+[2022-11-26 01:03:39.333] [info] batch_size=16383 : QPS=69900, Latency[ave=188ms, 99p=235ms]
+[2022-11-26 01:04:10.420] [info] batch_size=8191 : QPS=66074, Latency[ave=100ms, 99p=140ms]
+[2022-11-26 01:04:41.286] [info] batch_size=4095 : QPS=61834, Latency[ave=53ms, 99p=80ms]
+[2022-11-26 01:05:12.036] [info] batch_size=2047 : QPS=56633, Latency[ave=29ms, 99p=55ms]
+[2022-11-26 01:05:42.599] [info] batch_size=1023 : QPS=52718, Latency[ave=15ms, 99p=35ms]
+[2022-11-26 01:06:13.111] [info] batch_size=511 : QPS=50146, Latency[ave=7ms, 99p=15ms]
+[2022-11-26 01:06:43.495] [info] batch_size=255 : QPS=46053, Latency[ave=3ms, 99p=10ms]
+[2022-11-26 01:06:43.495] [info] -------------------------------------------------

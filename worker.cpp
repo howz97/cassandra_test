@@ -8,24 +8,24 @@
 void call_back(CassFuture *future, void *data) {
   auto now = std::chrono::system_clock::now();
   Worker *worker = (Worker *)data;
-  CassError ce = cass_future_error_code(future);
-  if (ce == CASS_OK) {
-    worker->batch_executed_++;
-    uint32_t latency = std::chrono::duration_cast<std::chrono::milliseconds>(
-                           now - worker->last_point_)
-                           .count();
-    worker->latency_sum_ += latency;
-    if (latency >= STAT_MAX) {
-      worker->latency_stat_[STAT_LEN - 1]++;
-    } else {
-      worker->latency_stat_[latency / STAT_GRAIN]++;
-    }
-    cass_batch_free(worker->batch_);
-    worker->batch_ = nullptr;
-  } else {
-    spdlog::warn("future call_back get error: {}\n", cass_error_desc(ce));
-  }
   if (now < worker->end_point_) {
+    CassError ce = cass_future_error_code(future);
+    if (ce == CASS_OK) {
+      worker->batch_executed_++;
+      uint32_t latency = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             now - worker->last_point_)
+                             .count();
+      worker->latency_sum_ += latency;
+      if (latency >= STAT_MAX) {
+        worker->latency_stat_[STAT_LEN - 1]++;
+      } else {
+        worker->latency_stat_[latency / STAT_GRAIN]++;
+      }
+      cass_batch_free(worker->batch_);
+      worker->batch_ = nullptr;
+    } else {
+      spdlog::warn("future call_back get error: {}\n", cass_error_desc(ce));
+    }
     worker->Execute();
   } else {
     std::unique_lock lk(worker->info_->mu);

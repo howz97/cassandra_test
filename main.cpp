@@ -5,11 +5,11 @@
 #include <unistd.h>
 
 #include "cass/include/cassandra.h"
+#include "cxxopts/include/cxxopts.hpp"
 #include "spdlog/include/spdlog/sinks/basic_file_sink.h"
 #include "spdlog/include/spdlog/spdlog.h"
 #include "worker.h"
 
-#define AVARAGE_LOOP 1
 #define TABLE_NAME "films"
 
 CassSession *session = NULL;
@@ -152,7 +152,6 @@ void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
   assert(num_fut);
   assert(batch_size);
   assert(num_part);
-  assert(num_part <= num_fut);
   if (clean_tbl) {
     assert(create_table() == CASS_OK);
   }
@@ -180,7 +179,7 @@ void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
 }
 
 void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
-  uint32_t concurrency = 3;
+  uint32_t concurrency = 1;
   uint32_t num_part = 1;
   spdlog::info("-----------------test_batch_size: concurrency={}, num_part={}",
                concurrency, num_part);
@@ -195,8 +194,8 @@ void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
 }
 
 void test_num_future(const int max_fut, const int min_fut) {
-  uint32_t batch_size = 2;
-  uint32_t num_part = 1;
+  uint32_t batch_size = 1024;
+  uint32_t num_part = 2;
   spdlog::info("-----------------test_num_future: batch_size={}, num_part={}",
                batch_size, num_part);
   for (int nf = max_fut; nf >= min_fut; nf /= 2) {
@@ -210,17 +209,22 @@ void test_num_future(const int max_fut, const int min_fut) {
 }
 
 void test_num_partition(const int max_part, const int min_part) {
-  uint32_t concurrency = max_part;
+  uint32_t concurrency = 1024;
   uint32_t batch_size = 1024;
   spdlog::info(
       "-----------------test_num_partition: concurrency={}, batch_size={}",
       concurrency, batch_size);
-  for (int p = max_part; p >= min_part; p /= 2) {
+  for (int p = max_part; p >= min_part;) {
     Result result;
     measure(concurrency, batch_size, p, true, &result);
     spdlog::info("num_part={} : QPS={}, Latency[ave={}ms, 99p={}ms]", p,
                  result.qps, result.ave_latency,
                  result.LatencyPercentiles(0.99));
+    if (p >= 16) {
+      p /= 2;
+    } else {
+      p -= 2;
+    }
   }
   spdlog::info("-------------------------------------------------");
 }
@@ -228,7 +232,7 @@ void test_num_partition(const int max_part, const int min_part) {
 void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
                             uint32_t num_part) {
   // assert(create_table() == CASS_OK);
-  int32_t looptimes = 6;
+  int32_t looptimes = 2;
   spdlog::info("-----------------test_continuous_insert: concurrency={}, "
                "batch_size={}, num_part={}",
                concurrency, batch_size, num_part);
@@ -239,37 +243,37 @@ void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
                  result.ave_latency, result.LatencyPercentiles(0.99));
   }
   spdlog::info("-------------------------------------------------");
-  assert(drop_table() == CASS_OK);
+  // assert(drop_table() == CASS_OK);
 }
 
-int main(int argc, char *argv[]) {
-  assert(argc >= 4);
-  uint32_t concurrency = atoi(argv[1]);
-  uint32_t batch_size = atoi(argv[2]);
-  uint32_t num_part = atoi(argv[3]);
-  uint32_t req_timeout = 12;
-  if (argc == 5) {
-    req_timeout = atoi(argv[4]);
-  }
+void cmd_run(int argc, char *argv[]) {
+  cxxopts::Options options("test", "A brief description");
+  options.add_options()("cl", "Concurrency level", cxxopts::value<uint32_t>())(
+      "bsize", "Batch size", cxxopts::value<uint32_t>())(
+      "npart", "Number of partitions", cxxopts::value<uint32_t>());
+  auto result = options.parse(argc, argv);
+  uint32_t concurrency = result["cl"].as<uint32_t>();
+  uint32_t batch_size = result["bsize"].as<uint32_t>();
+  uint32_t num_part = result["npart"].as<uint32_t>();
   assert(concurrency);
   assert(batch_size);
   assert(num_part);
-  assert(req_timeout);
-
   char logfile[64];
-  int n = sprintf(logfile, "../output/%d_%d_%dp_%ds.log", concurrency,
-                  batch_size, num_part, req_timeout);
+  int n = sprintf(logfile, "../output/%d_%d_%dp.log", concurrency, batch_size,
+                  num_part);
   assert(n);
   auto logger = spdlog::basic_logger_mt("test_logger", logfile, true);
   spdlog::set_default_logger(logger);
   spdlog::flush_on(spdlog::level::info);
+  test_continuous_insert(concurrency, batch_size, num_part);
+}
 
+int main(int argc, char *argv[]) {
   CassCluster *cluster = NULL;
   const char *hosts = "127.0.0.1";
   session = cass_session_new();
   uuid_gen = cass_uuid_gen_new();
   cluster = create_cluster(hosts);
-  cass_cluster_set_request_timeout(cluster, req_timeout * 1000);
 
   if (connect_session(session, cluster) != CASS_OK) {
     cass_uuid_gen_free(uuid_gen);
@@ -284,10 +288,19 @@ int main(int argc, char *argv[]) {
                                                         'replication_factor': '1' }");
   create_table();
   if (prepare_insert(session, &prepared) == CASS_OK) {
-    // test_batch_size(65535, 128);
-    // test_num_future(16384 * 2, 512);
-    // test_partition_size(2048, 1);
-    test_continuous_insert(concurrency, batch_size, num_part);
+    assert(argc >= 2);
+    std::string subcmd = argv[1];
+    if (subcmd == "run") {
+      cmd_run(argc, argv);
+    } else if (subcmd == "batch") {
+      test_batch_size(65535, 128);
+    } else if (subcmd == "concurrency") {
+      test_num_future(1024, 1);
+    } else if (subcmd == "partition") {
+      test_num_partition(8, 1);
+    } else {
+      std::cout << "invalid subcmd" << std::endl;
+    }
     cass_prepared_free(prepared);
   }
 
