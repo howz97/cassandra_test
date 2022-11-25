@@ -1,8 +1,9 @@
 #include "worker.h"
 
-// #include "spdlog/spdlog.h"
 #include <cassert>
 #include <stdio.h>
+
+#include "spdlog/include/spdlog/spdlog.h"
 
 void call_back(CassFuture *future, void *data) {
   auto now = std::chrono::system_clock::now();
@@ -22,7 +23,7 @@ void call_back(CassFuture *future, void *data) {
     cass_batch_free(worker->batch_);
     worker->batch_ = nullptr;
   } else {
-    printf("future call_back get error: %s\n", cass_error_desc(ce));
+    spdlog::warn("future call_back get error: {}\n", cass_error_desc(ce));
   }
   if (now < worker->end_point_) {
     worker->Execute();

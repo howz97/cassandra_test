@@ -10,9 +10,11 @@ aux_source_directory(. DIR_SRCS)
 
 # 添加子目录
 add_subdirectory(cass)
+add_subdirectory(spdlog)
 
 # 指定生成目标 
 add_executable(DatastaxTest ${DIR_SRCS})
 
 # 添加链接库
 target_link_libraries(DatastaxTest cassandra)
+target_link_libraries(DatastaxTest spdlog)

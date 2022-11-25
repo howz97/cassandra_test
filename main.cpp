@@ -5,6 +5,8 @@
 #include <unistd.h>
 
 #include "cass/include/cassandra.h"
+#include "spdlog/include/spdlog/sinks/basic_file_sink.h"
+#include "spdlog/include/spdlog/spdlog.h"
 #include "worker.h"
 
 #define AVARAGE_LOOP 1
@@ -121,7 +123,7 @@ struct Result {
         }
         batch_executed += w.batch_executed_;
       } else {
-        printf("worker %d executed 0 batch\n", w.id_);
+        spdlog::warn("worker {} executed 0 batch\n", w.id_);
       }
     }
     if (valid_worker) {
@@ -178,83 +180,96 @@ void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
 }
 
 void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
-  std::cout << "-----------------"
-            << "test_batch_size" << std::endl;
+  uint32_t concurrency = 3;
+  uint32_t num_part = 1;
+  spdlog::info("-----------------test_batch_size: concurrency={}, num_part={}",
+               concurrency, num_part);
   for (int bs = max_batch; bs >= min_batch; bs /= 2) {
     Result result;
-    measure(3, bs, 1, true, &result);
-    printf("batch_size=%d : ", bs);
-    printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result.qps,
-           result.ave_latency, result.LatencyPercentiles(0.99));
-    // for (uint32_t i = 0; i < STAT_LEN; ++i) {
-    //   if (result->latency_stat[i]) {
-    //     printf("(%d-%dms)=%d,", i * STAT_GRAIN, (i + 1) * STAT_GRAIN,
-    //            result->latency_stat[i]);
-    //   }
-    // }
-    // std::cout << std::endl;
+    measure(concurrency, bs, num_part, true, &result);
+    spdlog::info("batch_size={} : QPS={}, Latency[ave={}ms, 99p={}ms]", bs,
+                 result.qps, result.ave_latency,
+                 result.LatencyPercentiles(0.99));
   }
-  std::cout << "----------------------------------" << std::endl;
+  spdlog::info("-------------------------------------------------");
 }
 
 void test_num_future(const int max_fut, const int min_fut) {
   uint32_t batch_size = 2;
   uint32_t num_part = 1;
-  printf("-----------------test_num_partition batch_size=%d, num_part=%d\n",
-         batch_size, num_part);
+  spdlog::info("-----------------test_num_future: batch_size={}, num_part={}",
+               batch_size, num_part);
   for (int nf = max_fut; nf >= min_fut; nf /= 2) {
     Result result;
     measure(nf, batch_size, num_part, true, &result);
-    fprintf(stdout, "num_fut=%d :", nf);
-    printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result.qps,
-           result.ave_latency, result.LatencyPercentiles(0.99));
+    spdlog::info("num_fut={} : QPS={}, Latency[ave={}ms, 99p={}ms]", nf,
+                 result.qps, result.ave_latency,
+                 result.LatencyPercentiles(0.99));
   }
-  std::cout << "----------------------------------" << std::endl;
+  spdlog::info("-------------------------------------------------");
 }
 
 void test_num_partition(const int max_part, const int min_part) {
   uint32_t concurrency = max_part;
   uint32_t batch_size = 1024;
-  printf("-----------------test_num_partition concurrency=%d, batch_size=%d\n",
-         concurrency, batch_size);
+  spdlog::info(
+      "-----------------test_num_partition: concurrency={}, batch_size={}",
+      concurrency, batch_size);
   for (int p = max_part; p >= min_part; p /= 2) {
     Result result;
     measure(concurrency, batch_size, p, true, &result);
-    fprintf(stdout, "num_part=%d :", p);
-    printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result.qps,
-           result.ave_latency, result.LatencyPercentiles(0.99));
+    spdlog::info("num_part={} : QPS={}, Latency[ave={}ms, 99p={}ms]", p,
+                 result.qps, result.ave_latency,
+                 result.LatencyPercentiles(0.99));
   }
-  std::cout << "----------------------------------" << std::endl;
+  spdlog::info("-------------------------------------------------");
 }
 
-void test_continuous_insert(const int32_t looptimes) {
+void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
+                            uint32_t num_part) {
   // assert(create_table() == CASS_OK);
-  uint32_t concurrency = 32;
-  uint32_t batch_size = 1024;
-  uint32_t num_part = 1;
-  printf("-----------------test_continuous_insert concurrency=%d, "
-         "batch_size=%d, num_part=%d\n",
-         concurrency, batch_size, num_part);
+  int32_t looptimes = 6;
+  spdlog::info("-----------------test_continuous_insert: concurrency={}, "
+               "batch_size={}, num_part={}",
+               concurrency, batch_size, num_part);
   for (int32_t i = 0; i < looptimes; ++i) {
     Result result;
     measure(concurrency, batch_size, num_part, false, &result);
-    printf("QPS=%d, Latency[ave=%dms, 99p=%dms]\n", result.qps,
-           result.ave_latency, result.LatencyPercentiles(0.99));
-    sleep(1);
+    spdlog::info("QPS={}, Latency[ave={}ms, 99p={}ms]", result.qps,
+                 result.ave_latency, result.LatencyPercentiles(0.99));
   }
-  std::cout << "----------------------------------" << std::endl;
-  // assert(drop_table() == CASS_OK);
+  spdlog::info("-------------------------------------------------");
+  assert(drop_table() == CASS_OK);
 }
 
 int main(int argc, char *argv[]) {
+  assert(argc >= 4);
+  uint32_t concurrency = atoi(argv[1]);
+  uint32_t batch_size = atoi(argv[2]);
+  uint32_t num_part = atoi(argv[3]);
+  uint32_t req_timeout = 12;
+  if (argc == 5) {
+    req_timeout = atoi(argv[4]);
+  }
+  assert(concurrency);
+  assert(batch_size);
+  assert(num_part);
+  assert(req_timeout);
+
+  char logfile[64];
+  int n = sprintf(logfile, "../output/%d_%d_%dp_%ds.log", concurrency,
+                  batch_size, num_part, req_timeout);
+  assert(n);
+  auto logger = spdlog::basic_logger_mt("test_logger", logfile, true);
+  spdlog::set_default_logger(logger);
+  spdlog::flush_on(spdlog::level::info);
+
   CassCluster *cluster = NULL;
   const char *hosts = "127.0.0.1";
-  if (argc > 1) {
-    hosts = argv[1];
-  }
   session = cass_session_new();
   uuid_gen = cass_uuid_gen_new();
   cluster = create_cluster(hosts);
+  cass_cluster_set_request_timeout(cluster, req_timeout * 1000);
 
   if (connect_session(session, cluster) != CASS_OK) {
     cass_uuid_gen_free(uuid_gen);
@@ -272,7 +287,7 @@ int main(int argc, char *argv[]) {
     // test_batch_size(65535, 128);
     // test_num_future(16384 * 2, 512);
     // test_partition_size(2048, 1);
-    test_continuous_insert(100);
+    test_continuous_insert(concurrency, batch_size, num_part);
     cass_prepared_free(prepared);
   }
 
