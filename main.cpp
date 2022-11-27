@@ -110,7 +110,7 @@ struct Result {
   uint32_t latency_stat[STAT_LEN] = {};
   uint32_t batch_executed = 0;
 
-  void Calculate(std::vector<Worker> workers) {
+  void Calculate(std::vector<Worker> &workers) {
     uint32_t valid_worker = 0;
     for (Worker &w : workers) {
       if (w.batch_executed_) {
@@ -232,7 +232,7 @@ void test_num_partition(const int max_part, const int min_part) {
 void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
                             uint32_t num_part) {
   // assert(create_table() == CASS_OK);
-  int32_t looptimes = 2;
+  int32_t looptimes = 1;
   spdlog::info("-----------------test_continuous_insert: concurrency={}, "
                "batch_size={}, num_part={}",
                concurrency, batch_size, num_part);

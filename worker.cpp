@@ -7,7 +7,7 @@
 
 void call_back(CassFuture *future, void *data) {
   auto now = std::chrono::system_clock::now();
-  Worker *worker = (Worker *)data;
+  Worker *worker = static_cast<Worker *>(data);
   if (now < worker->end_point_) {
     CassError ce = cass_future_error_code(future);
     if (ce == CASS_OK) {
@@ -24,7 +24,8 @@ void call_back(CassFuture *future, void *data) {
       cass_batch_free(worker->batch_);
       worker->batch_ = nullptr;
     } else {
-      spdlog::warn("future call_back get error: {}\n", cass_error_desc(ce));
+      spdlog::warn("worker {} future call_back get error: {}", worker->id_,
+                   cass_error_desc(ce));
     }
     worker->Execute();
   } else {
