@@ -195,7 +195,7 @@ void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
 
 void test_num_future(const int max_fut, const int min_fut) {
   uint32_t batch_size = 1024;
-  uint32_t num_part = 2;
+  uint32_t num_part = 1024;
   spdlog::info("-----------------test_num_future: batch_size={}, num_part={}",
                batch_size, num_part);
   for (int nf = max_fut; nf >= min_fut; nf /= 2) {
@@ -262,7 +262,7 @@ void cmd_run(int argc, char *argv[]) {
   int n = sprintf(logfile, "../output/%d_%d_%dp.log", concurrency, batch_size,
                   num_part);
   assert(n);
-  auto logger = spdlog::basic_logger_mt("test_logger", logfile, true);
+  auto logger = spdlog::basic_logger_mt("test_logger", logfile, false);
   spdlog::set_default_logger(logger);
   spdlog::flush_on(spdlog::level::info);
   test_continuous_insert(concurrency, batch_size, num_part);
@@ -274,6 +274,7 @@ int main(int argc, char *argv[]) {
   session = cass_session_new();
   uuid_gen = cass_uuid_gen_new();
   cluster = create_cluster(hosts);
+  cass_cluster_set_num_threads_io(cluster, 2);
 
   if (connect_session(session, cluster) != CASS_OK) {
     cass_uuid_gen_free(uuid_gen);
@@ -295,7 +296,7 @@ int main(int argc, char *argv[]) {
     } else if (subcmd == "batch") {
       test_batch_size(65535, 128);
     } else if (subcmd == "concurrency") {
-      test_num_future(1024, 1);
+      test_num_future(256, 1);
     } else if (subcmd == "partition") {
       test_num_partition(8, 1);
     } else {

@@ -10,7 +10,7 @@ using time_point = std::chrono::time_point<std::chrono::system_clock>;
 #define STAT_GRAIN 5
 #define STAT_MAX 10000
 #define STAT_LEN STAT_MAX / STAT_GRAIN
-#define RUN_SECONDS 5
+#define RUN_SECONDS 60
 
 struct CommonInfo {
   CassSession *session;
