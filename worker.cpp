@@ -53,7 +53,7 @@ Worker::~Worker() {
 
 void Worker::Execute() {
   if (batch_ == nullptr) {
-    batch_ = cass_batch_new(CASS_BATCH_TYPE_LOGGED);
+    batch_ = cass_batch_new(CASS_BATCH_TYPE_UNLOGGED);
     cass_batch_set_is_idempotent(batch_, cass_true);
     for (uint32_t i = 0; i < batch_size_; ++i) {
       CassStatement *stmt = NewStatement();
