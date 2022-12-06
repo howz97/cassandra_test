@@ -243,7 +243,7 @@ void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
                  result.ave_latency, result.LatencyPercentiles(0.99));
   }
   spdlog::info("-------------------------------------------------");
-  // assert(drop_table() == CASS_OK);
+  assert(drop_table() == CASS_OK);
 }
 
 void cmd_run(int argc, char *argv[]) {
@@ -254,10 +254,14 @@ void cmd_run(int argc, char *argv[]) {
   auto result = options.parse(argc, argv);
   uint32_t concurrency = result["cl"].as<uint32_t>();
   uint32_t batch_size = result["bsize"].as<uint32_t>();
-  uint32_t num_part = result["npart"].as<uint32_t>();
   assert(concurrency);
   assert(batch_size);
-  assert(num_part);
+  uint32_t num_part = 0;
+  if (result["npart"].count() != 0) {
+    num_part = result["npart"].as<uint32_t>();
+  } else {
+    num_part = concurrency;
+  }
   char logfile[64];
   int n = sprintf(logfile, "../output/%d_%d_%dp.log", concurrency, batch_size,
                   num_part);
@@ -270,11 +274,14 @@ void cmd_run(int argc, char *argv[]) {
 
 int main(int argc, char *argv[]) {
   CassCluster *cluster = NULL;
-  const char *hosts = "127.0.0.1";
+  // const char *hosts = "192.168.0.107";
+  const char *hosts = "192.168.142.128";
   session = cass_session_new();
   uuid_gen = cass_uuid_gen_new();
   cluster = create_cluster(hosts);
-  cass_cluster_set_num_threads_io(cluster, 2);
+  const uint16_t num_threads = 4;
+  cass_cluster_set_num_threads_io(cluster, num_threads);
+  spdlog::info("using {} io threads", num_threads);
 
   if (connect_session(session, cluster) != CASS_OK) {
     cass_uuid_gen_free(uuid_gen);
@@ -291,16 +298,14 @@ int main(int argc, char *argv[]) {
   if (prepare_insert(session, &prepared) == CASS_OK) {
     assert(argc >= 2);
     std::string subcmd = argv[1];
-    if (subcmd == "run") {
-      cmd_run(argc, argv);
-    } else if (subcmd == "batch") {
+    if (subcmd == "batch") {
       test_batch_size(65535, 128);
     } else if (subcmd == "concurrency") {
       test_num_future(256, 1);
     } else if (subcmd == "partition") {
       test_num_partition(8, 1);
     } else {
-      std::cout << "invalid subcmd" << std::endl;
+      cmd_run(argc, argv);
     }
     cass_prepared_free(prepared);
   }
