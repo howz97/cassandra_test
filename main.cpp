@@ -1,16 +1,14 @@
 #include <cassert>
 #include <chrono>
-#include <iostream>
 #include <stdio.h>
 #include <unistd.h>
 
 #include "cass/include/cassandra.h"
 #include "cxxopts/include/cxxopts.hpp"
+#include "executor.h"
 #include "spdlog/include/spdlog/sinks/basic_file_sink.h"
 #include "spdlog/include/spdlog/spdlog.h"
 #include "worker.h"
-
-#define TABLE_NAME "films"
 
 CassSession *session = NULL;
 const CassPrepared *prepared = NULL;
@@ -110,26 +108,6 @@ struct Result {
   uint32_t latency_stat[STAT_LEN] = {};
   uint32_t batch_executed = 0;
 
-  void Calculate(std::vector<Worker> &workers) {
-    uint32_t valid_worker = 0;
-    for (Worker &w : workers) {
-      if (w.batch_executed_) {
-        w.CheckValid();
-        valid_worker++;
-        qps += w.QPS();
-        ave_latency += w.AverageLatency();
-        for (uint32_t i = 0; i < STAT_LEN; ++i) {
-          latency_stat[i] += w.latency_stat_[i];
-        }
-        batch_executed += w.batch_executed_;
-      } else {
-        spdlog::warn("worker {} executed 0 batch\n", w.id_);
-      }
-    }
-    if (valid_worker) {
-      ave_latency /= valid_worker;
-    }
-  }
   uint32_t LatencyPercentiles(double p) {
     assert(p <= 1);
     uint32_t left = batch_executed;
@@ -144,6 +122,38 @@ struct Result {
     return (i + 1) * STAT_GRAIN;
   }
 };
+
+CassStatement *insert_statement(int32_t pk, const char *director) {
+  CassStatement *stmt = cass_prepared_bind(prepared);
+  cass_statement_set_is_idempotent(stmt, cass_true);
+  cass_statement_bind_int32_by_name(stmt, "partition_key", pk);
+  cass_statement_bind_string_by_name(stmt, "director", director);
+  CassUuid uuid;
+  cass_uuid_gen_random(uuid_gen, &uuid);
+  cass_statement_bind_uuid_by_name(stmt, "name", uuid);
+  return stmt;
+}
+
+void Calculate(Result *result, std::vector<Worker> &workers) {
+  uint32_t valid_worker = 0;
+  for (Worker &w : workers) {
+    if (w.batch_executed_) {
+      w.CheckValid();
+      valid_worker++;
+      result->qps += w.QPS();
+      result->ave_latency += w.AverageLatency();
+      for (uint32_t i = 0; i < STAT_LEN; ++i) {
+        result->latency_stat[i] += w.latency_stat_[i];
+      }
+      result->batch_executed += w.batch_executed_;
+    } else {
+      spdlog::warn("worker {} executed 0 batch\n", w.id_);
+    }
+  }
+  if (valid_worker) {
+    result->ave_latency /= valid_worker;
+  }
+}
 
 void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
              bool clean_tbl, Result *result) {
@@ -175,7 +185,7 @@ void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
   if (clean_tbl) {
     drop_table();
   }
-  result->Calculate(workers);
+  Calculate(result, workers);
 }
 
 void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
@@ -243,7 +253,7 @@ void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
                  result.ave_latency, result.LatencyPercentiles(0.99));
   }
   spdlog::info("-------------------------------------------------");
-  assert(drop_table() == CASS_OK);
+  drop_table();
 }
 
 void cmd_run(int argc, char *argv[]) {
@@ -272,14 +282,51 @@ void cmd_run(int argc, char *argv[]) {
   test_continuous_insert(concurrency, batch_size, num_part);
 }
 
+Result measure_qps(int num_fut, int batch_size, int num_part, bool clean_tbl) {
+  assert(num_fut);
+  assert(batch_size);
+  assert(num_part);
+  assert(num_part <= num_fut);
+
+  if (clean_tbl) {
+    assert(create_table() == CASS_OK);
+  }
+  CassBatchExecutor executor(session, batch_size);
+
+  auto end =
+      std::chrono::system_clock::now() + std::chrono::seconds(RUN_SECONDS);
+  while (std::chrono::system_clock::now() < end) {
+    for (int i = 0; i < num_fut; ++i) {
+      for (int j = 0; j < batch_size; ++j) {
+        auto stmt = insert_statement(i % num_part, "AngLee");
+        assert(executor.AddBatchStatement(stmt) == CASS_OK);
+      }
+      executor.Execute();
+    }
+    CassError ce = executor.Wait_until(end);
+    assert(ce == CASS_OK);
+  }
+  if (clean_tbl) {
+    execute_query(session, "DROP TABLE test.films");
+  }
+  Result result;
+  result.qps = (executor.BatchExecuted() * batch_size) / RUN_SECONDS;
+  result.batch_executed = executor.BatchExecuted();
+  return result;
+}
+
+void test_batch_executor() {
+  Result result = measure_qps(64, 64, 32, true);
+  spdlog::info("QPS={}", result.qps);
+}
+
 int main(int argc, char *argv[]) {
   CassCluster *cluster = NULL;
-  // const char *hosts = "192.168.0.107";
-  const char *hosts = "192.168.142.128";
+  const char *hosts = "127.0.0.1";
   session = cass_session_new();
   uuid_gen = cass_uuid_gen_new();
   cluster = create_cluster(hosts);
-  const uint16_t num_threads = 4;
+  const uint16_t num_threads = 1;
   cass_cluster_set_num_threads_io(cluster, num_threads);
   spdlog::info("using {} io threads", num_threads);
 
@@ -304,6 +351,8 @@ int main(int argc, char *argv[]) {
       test_num_future(256, 1);
     } else if (subcmd == "partition") {
       test_num_partition(8, 1);
+    } else if (subcmd == "executor") {
+      test_batch_executor();
     } else {
       cmd_run(argc, argv);
     }
