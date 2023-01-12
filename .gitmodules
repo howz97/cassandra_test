@@ -1,0 +1,9 @@
+[submodule "cass"]
+	path = cass
+	url = https://github.com/datastax/cpp-driver
+[submodule "cxxopts"]
+	path = cxxopts
+	url = https://github.com/jarro2783/cxxopts
+[submodule "spdlog"]
+	path = spdlog
+	url = https://github.com/gabime/spdlog
