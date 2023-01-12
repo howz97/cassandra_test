@@ -299,11 +299,15 @@ Result measure_qps(int num_fut, int batch_size, int num_part, bool clean_tbl) {
     for (int i = 0; i < num_fut; ++i) {
       for (int j = 0; j < batch_size; ++j) {
         auto stmt = insert_statement(i % num_part, "AngLee");
-        assert(executor.AddBatchStatement(stmt) == CASS_OK);
+        CassError ce = executor.AddBatchStatement(stmt);
+        assert(ce == CASS_OK);
       }
       executor.Execute();
     }
     CassError ce = executor.Wait_until(end);
+    spdlog::trace(
+        "CassBatchExecutor finished one round, current batch_executed_= {}",
+        executor.BatchExecuted());
     assert(ce == CASS_OK);
   }
   if (clean_tbl) {
@@ -312,12 +316,14 @@ Result measure_qps(int num_fut, int batch_size, int num_part, bool clean_tbl) {
   Result result;
   result.qps = (executor.BatchExecuted() * batch_size) / RUN_SECONDS;
   result.batch_executed = executor.BatchExecuted();
+  result.ave_latency = executor.AvarageLantency();
   return result;
 }
 
 void test_batch_executor() {
   Result result = measure_qps(64, 64, 32, true);
-  spdlog::info("QPS={}", result.qps);
+  spdlog::info("QPS={}, ave_latency={}, executed {} batch", result.qps,
+               result.ave_latency, result.batch_executed);
 }
 
 int main(int argc, char *argv[]) {

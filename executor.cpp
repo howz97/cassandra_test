@@ -56,10 +56,7 @@ CassError CassBatchExecutor::AddBatchStatement(CassStatement *stmt) {
  *
  */
 void CassBatchExecutor::Execute() {
-  if (!batch_) {
-    assert(current_batch_size_ == 0);
-    return;
-  }
+  assert(batch_);
   futures_.emplace_back(cass_session_execute_batch(session_, batch_), batch_,
                         std::chrono::system_clock::now());
 
@@ -94,7 +91,7 @@ CassError CassBatchExecutor::Wait_until(
       const char *error_message;
       size_t error_message_length;
       cass_future_error_message(future, &error_message, &error_message_length);
-      std::cout << "CassBatchExecute Error: " << error_message;
+      spdlog::error("CassBatchExecute Error {}", error_message);
       fut_it->cass_future = nullptr;
       ++fut_it;
     }

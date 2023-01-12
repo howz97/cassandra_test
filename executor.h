@@ -2,6 +2,7 @@
 #include <vector>
 
 #include "cass/include/cassandra.h"
+#include "spdlog/spdlog.h"
 
 struct FutureElement {
   CassFuture *cass_future;
