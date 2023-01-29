@@ -259,7 +259,7 @@ void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
 void cmd_run(int argc, char *argv[]) {
   cxxopts::Options options("test", "A brief description");
   options.add_options()("cl", "Concurrency level", cxxopts::value<uint32_t>())(
-      "bsize", "Batch size", cxxopts::value<uint32_t>())(
+      "bsize", "Batch size", cxxopts::value<uint32_t>()->default_value("64"))(
       "npart", "Number of partitions", cxxopts::value<uint32_t>());
   auto result = options.parse(argc, argv);
   uint32_t concurrency = result["cl"].as<uint32_t>();
