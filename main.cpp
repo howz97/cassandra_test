@@ -104,23 +104,7 @@ CassError drop_table() {
 
 struct Result {
   int32_t qps = 0;
-  int32_t ave_latency = 0;
-  uint32_t latency_stat[STAT_LEN] = {};
-  uint32_t batch_executed = 0;
-
-  uint32_t LatencyPercentiles(double p) {
-    assert(p <= 1);
-    uint32_t left = batch_executed;
-    int32_t i = STAT_LEN - 1;
-    for (; i >= 0; --i) {
-      if (double(left - latency_stat[i]) / double(batch_executed) >= p) {
-        left -= latency_stat[i];
-      } else {
-        break;
-      }
-    }
-    return (i + 1) * STAT_GRAIN;
-  }
+  LantencyStat stat;
 };
 
 CassStatement *insert_statement(int32_t pk, const char *director) {
@@ -134,27 +118,6 @@ CassStatement *insert_statement(int32_t pk, const char *director) {
   return stmt;
 }
 
-void Calculate(Result *result, std::vector<Worker> &workers) {
-  uint32_t valid_worker = 0;
-  for (Worker &w : workers) {
-    if (w.batch_executed_) {
-      w.CheckValid();
-      valid_worker++;
-      result->qps += w.QPS();
-      result->ave_latency += w.AverageLatency();
-      for (uint32_t i = 0; i < STAT_LEN; ++i) {
-        result->latency_stat[i] += w.latency_stat_[i];
-      }
-      result->batch_executed += w.batch_executed_;
-    } else {
-      spdlog::warn("worker {} executed 0 batch\n", w.id_);
-    }
-  }
-  if (valid_worker) {
-    result->ave_latency /= valid_worker;
-  }
-}
-
 void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
              bool clean_tbl, Result *result) {
   // printf("measure(%d, %d, %d, %d)\n", num_fut, batch_size, num_part,
@@ -166,16 +129,20 @@ void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
     assert(create_table() == CASS_OK);
   }
 
-  CommonInfo info;
-  {
-    info.session = session;
-    info.prepared = prepared;
-    info.uuid_gen = uuid_gen;
-  }
+  CQueue q(num_fut);
+  CommonInfo info(session, prepared, uuid_gen, q);
   std::vector<Worker> workers;
   workers.reserve(num_fut);
   for (uint32_t id = 0; id < num_fut; ++id) {
     workers.emplace_back(id, id % num_part, batch_size, &info);
+  }
+  while (true) {
+    std::pair<CassError, Worker *> p;
+    q.wait_dequeue(p);
+    p.second->Callback(p.first);
+    if (info.finished == num_fut) {
+      break;
+    }
   }
   {
     std::unique_lock lk(info.mu);
@@ -185,7 +152,16 @@ void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
   if (clean_tbl) {
     drop_table();
   }
-  Calculate(result, workers);
+
+  for (Worker &w : workers) {
+    if (w.stat_.Count()) {
+      w.stat_.CheckValid();
+      result->stat += w.stat_;
+    } else {
+      spdlog::warn("worker {} executed 0 batch\n", w.id_);
+    }
+  }
+  result->qps = (result->stat.Count() * batch_size) / RUN_SECONDS;
 }
 
 void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
@@ -197,8 +173,8 @@ void test_batch_size(uint16_t max_batch, uint16_t min_batch) {
     Result result;
     measure(concurrency, bs, num_part, true, &result);
     spdlog::info("batch_size={} : QPS={}, Latency[ave={}ms, 99p={}ms]", bs,
-                 result.qps, result.ave_latency,
-                 result.LatencyPercentiles(0.99));
+                 result.qps, result.stat.AverageLatency(),
+                 result.stat.LatencyPercentiles(0.99));
   }
   spdlog::info("-------------------------------------------------");
 }
@@ -212,8 +188,8 @@ void test_num_future(const int max_fut, const int min_fut) {
     Result result;
     measure(nf, batch_size, num_part, true, &result);
     spdlog::info("num_fut={} : QPS={}, Latency[ave={}ms, 99p={}ms]", nf,
-                 result.qps, result.ave_latency,
-                 result.LatencyPercentiles(0.99));
+                 result.qps, result.stat.AverageLatency(),
+                 result.stat.LatencyPercentiles(0.99));
   }
   spdlog::info("-------------------------------------------------");
 }
@@ -228,8 +204,8 @@ void test_num_partition(const int max_part, const int min_part) {
     Result result;
     measure(concurrency, batch_size, p, true, &result);
     spdlog::info("num_part={} : QPS={}, Latency[ave={}ms, 99p={}ms]", p,
-                 result.qps, result.ave_latency,
-                 result.LatencyPercentiles(0.99));
+                 result.qps, result.stat.AverageLatency(),
+                 result.stat.LatencyPercentiles(0.99));
     if (p >= 16) {
       p /= 2;
     } else {
@@ -250,7 +226,8 @@ void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
     Result result;
     measure(concurrency, batch_size, num_part, false, &result);
     spdlog::info("QPS={}, Latency[ave={}ms, 99p={}ms]", result.qps,
-                 result.ave_latency, result.LatencyPercentiles(0.99));
+                 result.stat.AverageLatency(),
+                 result.stat.LatencyPercentiles(0.99));
   }
   spdlog::info("-------------------------------------------------");
   drop_table();
@@ -305,25 +282,37 @@ Result measure_qps(int num_fut, int batch_size, int num_part, bool clean_tbl) {
       executor.Execute();
     }
     CassError ce = executor.Wait_until(end);
-    spdlog::trace(
-        "CassBatchExecutor finished one round, current batch_executed_= {}",
-        executor.BatchExecuted());
     assert(ce == CASS_OK);
   }
   if (clean_tbl) {
     execute_query(session, "DROP TABLE test.films");
   }
   Result result;
-  result.qps = (executor.BatchExecuted() * batch_size) / RUN_SECONDS;
-  result.batch_executed = executor.BatchExecuted();
-  result.ave_latency = executor.AvarageLantency();
+  result.qps = (executor.stat_.Count() * batch_size) / RUN_SECONDS;
+  result.stat = executor.stat_;
   return result;
 }
 
 void test_batch_executor() {
-  Result result = measure_qps(64, 64, 32, true);
+  Result result = measure_qps(256, 64, 256, true);
   spdlog::info("QPS={}, ave_latency={}, executed {} batch", result.qps,
-               result.ave_latency, result.batch_executed);
+               result.stat.AverageLatency(), result.stat.Count());
+}
+
+void reader() {
+  LantencyStat stat;
+  auto end =
+      std::chrono::system_clock::now() + std::chrono::seconds(RUN_SECONDS);
+  while (std::chrono::system_clock::now() < end) {
+    auto a = std::chrono::system_clock::now();
+    execute_query(session, "SELECT * FROM test.films LIMIT 1");
+    auto b = std::chrono::system_clock::now();
+    uint latency =
+        std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count();
+    stat.Record(latency);
+  }
+  spdlog::info("reader throughput={}, ave={}ms, p90={}ms", stat.Count(),
+               stat.AverageLatency(), stat.LatencyPercentiles(0.9));
 }
 
 int main(int argc, char *argv[]) {
@@ -348,6 +337,9 @@ int main(int argc, char *argv[]) {
                                                         'class': 'SimpleStrategy', \
                                                         'replication_factor': '1' }");
   create_table();
+
+  std::thread read(reader);
+
   if (prepare_insert(session, &prepared) == CASS_OK) {
     assert(argc >= 2);
     std::string subcmd = argv[1];
@@ -364,6 +356,7 @@ int main(int argc, char *argv[]) {
     }
     cass_prepared_free(prepared);
   }
+  read.join();
 
   cass_uuid_gen_free(uuid_gen);
   cass_cluster_free(cluster);

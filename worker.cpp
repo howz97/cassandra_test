@@ -6,34 +6,9 @@
 #include "spdlog/include/spdlog/spdlog.h"
 
 void call_back(CassFuture *future, void *data) {
-  auto now = std::chrono::system_clock::now();
   Worker *worker = static_cast<Worker *>(data);
-  if (now < worker->end_point_) {
-    CassError ce = cass_future_error_code(future);
-    if (ce == CASS_OK) {
-      worker->batch_executed_++;
-      uint32_t latency = std::chrono::duration_cast<std::chrono::milliseconds>(
-                             now - worker->last_point_)
-                             .count();
-      worker->latency_sum_ += latency;
-      if (latency >= STAT_MAX) {
-        worker->latency_stat_[STAT_LEN - 1]++;
-      } else {
-        worker->latency_stat_[latency / STAT_GRAIN]++;
-      }
-      cass_batch_free(worker->batch_);
-      worker->batch_ = nullptr;
-    } else {
-      spdlog::warn("worker {} future call_back get error: {}", worker->id_,
-                   cass_error_desc(ce));
-    }
-    worker->Execute();
-  } else {
-    std::unique_lock lk(worker->info_->mu);
-    worker->info_->finished++;
-    lk.unlock();
-    worker->info_->cv.notify_one();
-  }
+  CassError ce = cass_future_error_code(future);
+  worker->info_->q.enqueue({ce, worker});
 }
 
 Worker::Worker(uint32_t id, uint32_t target, uint32_t batch_size,
@@ -80,17 +55,25 @@ CassStatement *Worker::NewStatement() {
   return stmt;
 }
 
-uint32_t Worker::AverageLatency() {
-  if (batch_executed_ == 0) {
-    return 0;
+void Worker::Callback(CassError ce) {
+  auto now = std::chrono::system_clock::now();
+  if (now < end_point_) {
+    if (ce == CASS_OK) {
+      uint32_t latency = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             now - last_point_)
+                             .count();
+      stat_.Record(latency);
+      cass_batch_free(batch_);
+      batch_ = nullptr;
+    } else {
+      spdlog::warn("worker {} future call_back get error: {}", id_,
+                   cass_error_desc(ce));
+    }
+    Execute();
+  } else {
+    std::unique_lock lk(info_->mu);
+    info_->finished++;
+    lk.unlock();
+    info_->cv.notify_one();
   }
-  return latency_sum_ / batch_executed_;
-}
-
-void Worker::CheckValid() {
-  uint32_t count = 0;
-  for (uint32_t c : latency_stat_) {
-    count += c;
-  }
-  assert(count == batch_executed_);
 }

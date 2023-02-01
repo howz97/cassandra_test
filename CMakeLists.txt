@@ -16,9 +16,9 @@ add_subdirectory(spdlog)
 add_subdirectory(cxxopts)
 
 # 指定生成目标 
-add_executable(DatastaxTest ${DIR_SRCS})
+add_executable(cass_test ${DIR_SRCS})
 
 # 添加链接库
-target_link_libraries(DatastaxTest cassandra)
-target_link_libraries(DatastaxTest spdlog)
-target_link_libraries(DatastaxTest cxxopts)
+target_link_libraries(cass_test cassandra)
+target_link_libraries(cass_test spdlog)
+target_link_libraries(cass_test cxxopts)

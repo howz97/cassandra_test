@@ -3,6 +3,7 @@
 
 #include "cass/include/cassandra.h"
 #include "spdlog/spdlog.h"
+#include "util.h"
 
 struct FutureElement {
   CassFuture *cass_future;
@@ -26,8 +27,7 @@ public:
   // CassError Retry();
   uint8_t PendingFutureCount() { return futures_.size(); }
   bool IsFull() { return current_batch_size_ == batch_size_; }
-  int32_t BatchExecuted() { return batch_executed_; };
-  int32_t AvarageLantency() { return sum_lantency_ms_ / batch_executed_; };
+  LantencyStat stat_;
 
 private:
   CassBatch *batch_{nullptr};
@@ -35,6 +35,4 @@ private:
   std::vector<FutureElement> futures_;
   const int32_t batch_size_{0};
   int32_t current_batch_size_{0};
-  int32_t batch_executed_{0};
-  int32_t sum_lantency_ms_{0};
 };
