@@ -137,17 +137,20 @@ void measure(uint32_t num_fut, uint32_t batch_size, uint32_t num_part,
     workers.emplace_back(id, id % num_part, batch_size, &info);
   }
   while (true) {
-    std::pair<CassError, Worker *> p;
-    q.wait_dequeue(p);
-    p.second->Callback(p.first);
-    if (info.finished == num_fut) {
-      break;
+    std::pair<CassError, Worker *> pairs[128];
+    size_t n = q.wait_dequeue_bulk(pairs, 128);
+    for (int i = 0; i < n; ++i) {
+      auto p = pairs[i];
+      p.second->Callback(p.first);
+      if (info.finished == num_fut) {
+        goto END;
+      }
     }
   }
-  {
-    std::unique_lock lk(info.mu);
-    info.cv.wait(lk, [&] { return info.finished == num_fut; });
-  }
+END : {
+  std::unique_lock lk(info.mu);
+  info.cv.wait(lk, [&] { return info.finished == num_fut; });
+}
 
   if (clean_tbl) {
     drop_table();
