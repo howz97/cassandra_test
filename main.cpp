@@ -104,7 +104,7 @@ CassError drop_table() {
 
 struct Result {
   int32_t qps = 0;
-  LantencyStat stat;
+  LatencyStat stat;
 };
 
 CassStatement *insert_statement(int32_t pk, const char *director) {
@@ -239,8 +239,9 @@ void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
 void cmd_run(int argc, char *argv[]) {
   cxxopts::Options options("test", "A brief description");
   options.add_options()("cl", "Concurrency level", cxxopts::value<uint32_t>())(
-      "bsize", "Batch size", cxxopts::value<uint32_t>()->default_value("64"))(
-      "npart", "Number of partitions", cxxopts::value<uint32_t>());
+      "bsize", "Batch size",
+      cxxopts::value<uint32_t>()->default_value(
+          "64"))("npart", "Number of partitions", cxxopts::value<uint32_t>());
   auto result = options.parse(argc, argv);
   uint32_t concurrency = result["cl"].as<uint32_t>();
   uint32_t batch_size = result["bsize"].as<uint32_t>();
@@ -303,7 +304,7 @@ void test_batch_executor() {
 }
 
 void reader() {
-  LantencyStat stat;
+  LatencyStat stat;
   auto end =
       std::chrono::system_clock::now() + std::chrono::seconds(RUN_SECONDS);
   while (std::chrono::system_clock::now() < end) {

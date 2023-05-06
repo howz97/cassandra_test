@@ -27,7 +27,7 @@ public:
   // CassError Retry();
   uint8_t PendingFutureCount() { return futures_.size(); }
   bool IsFull() { return current_batch_size_ == batch_size_; }
-  LantencyStat stat_;
+  LatencyStat stat_;
 
 private:
   CassBatch *batch_{nullptr};

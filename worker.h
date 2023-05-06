@@ -42,6 +42,6 @@ public:
   CassBatch *batch_{nullptr};
   time_point last_point_;
   time_point end_point_;
-  LantencyStat stat_;
+  LatencyStat stat_;
   CommonInfo *info_;
 };
