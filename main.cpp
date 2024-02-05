@@ -239,9 +239,8 @@ void test_continuous_insert(uint32_t concurrency, uint32_t batch_size,
 void cmd_run(int argc, char *argv[]) {
   cxxopts::Options options("test", "A brief description");
   options.add_options()("cl", "Concurrency level", cxxopts::value<uint32_t>())(
-      "bsize", "Batch size",
-      cxxopts::value<uint32_t>()->default_value(
-          "64"))("npart", "Number of partitions", cxxopts::value<uint32_t>());
+      "bsize", "Batch size", cxxopts::value<uint32_t>()->default_value("64"))(
+      "npart", "Number of partitions", cxxopts::value<uint32_t>());
   auto result = options.parse(argc, argv);
   uint32_t concurrency = result["cl"].as<uint32_t>();
   uint32_t batch_size = result["bsize"].as<uint32_t>();
@@ -321,7 +320,7 @@ void reader() {
 
 int main(int argc, char *argv[]) {
   CassCluster *cluster = NULL;
-  const char *hosts = "127.0.0.1";
+  const char *hosts = "172.17.0.2,172.17.0.3,172.17.0.4";
   session = cass_session_new();
   uuid_gen = cass_uuid_gen_new();
   cluster = create_cluster(hosts);
